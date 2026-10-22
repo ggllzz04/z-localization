@@ -82,7 +82,7 @@ LIO 本身是紧耦合的，发散不太好判断。有时候位置飞了，或�
 ### 2.1 误差状态建模
 
 FAST-LIO 系列采用直积流形建模，旋转通过乘法更新，位置、速度和零偏分别相加；
-我们采用 $\mathrm{SE}_2(3)\ltimes\mathfrak{se}(3)$ 半直积结构，把导航状态与 IMU 零偏一起纳入误差变换。
+我们采用 $`\mathrm{SE}_2(3)\ltimes\mathfrak{se}(3)`$ 半直积结构，把导航状态与 IMU 零偏一起纳入误差变换。
 这样，姿态和速度部分的无噪声误差可以得到精确的线性形式，减少这两部分的线性化误差。具体可以参考
 [Equivariant Symmetries for Inertial Navigation Systems](https://arxiv.org/abs/2309.03765)。
 
@@ -143,7 +143,7 @@ $$
 新点到来时直接更新统计量，再从中计算平面信息，无需重新遍历历史点。
 达到更新上限后，进一步释放统计量，只保留匹配所需的平面信息，减少存储占用。具体逻辑如下：
 
-以体素中心 $o$ 为局部原点，记 $x_i=p_i-o$，保存点数、一阶矩和二阶矩：
+以体素中心 $`o`$ 为局部原点，记 $`x_i=p_i-o`$，保存点数、一阶矩和二阶矩：
 
 $$
 N=\sum_i 1,\qquad
@@ -151,8 +151,8 @@ s=\sum_i x_i,\qquad
 Q=\sum_i x_i x_i^\top.
 $$
 
-新点 $x$ 加入时，分别累加 $1$、$x$ 和 $xx^\top$。由这些累计量恢复平面中心 $c$ 和散布矩阵 $A$，
-再取最小特征值对应的单位特征向量作为法向 $n$：
+新点 $`x`$ 加入时，分别累加 $`1`$、$`x`$ 和 $`xx^\top`$。由这些累计量恢复平面中心 $`c`$ 和散布矩阵 $`A`$，
+再取最小特征值对应的单位特征向量作为法向 $`n`$：
 
 $$
 \begin{aligned}
@@ -175,11 +175,11 @@ $$
 在此基础上，我们还考虑了表面偏离理想平面的散布。实际的墙面、地面未必完全平整，
 即使平均平面已经估计得很准，局部点仍可能偏离它，这部分误差也需要计入观测。
 
-构建地图时，从支持点沿法向的散布中扣除已知噪声能够解释的部分，将剩余方差记为 $\tau^2$。
+构建地图时，从支持点沿法向的散布中扣除已知噪声能够解释的部分，将剩余方差记为 $`\tau^2`$。
 它同时参与平面参数协方差和点面残差方差的计算，避免对这类表面赋予过高的置信度。
 
-对于变换到 odom 系的扫描点 $p_i$，记其测量协方差为 $\Sigma_i$，平面参数协方差为 $\Sigma_\pi$，
-$h_i$ 为残差对平面参数的雅可比。一阶近似下，点面残差及其方差为：
+对于变换到 odom 系的扫描点 $`p_i`$，记其测量协方差为 $`\Sigma_i`$，平面参数协方差为 $`\Sigma_\pi`$，
+$`h_i`$ 为残差对平面参数的雅可比。一阶近似下，点面残差及其方差为：
 
 $$
 \begin{aligned}
@@ -193,18 +193,18 @@ $$
 因此，我们按匹配到的平面将点分组，保留平面参数误差带来的相关性。同组中两个不同点的残差协方差为：
 
 $$
-\operatorname{Cov}(r_i,r_j)\simeq h_i\Sigma_\pi h_j^\top,\qquad i\ne j.
+\mathrm{Cov}(r_i,r_j)\simeq h_i\Sigma_\pi h_j^\top,\qquad i\ne j.
 $$
 
 实现中，在平面的三个误差自由度内联合处理同组观测：两个法向方向偏差，以及沿法向的位置偏差。
 消去共享平面误差后，再将整组观测对位姿的约束交给滤波器，避免构造随点数增长的大协方差矩阵。
 
-记同一平面的残差向量为 $r_\pi$，对应的平面参数雅可比为 $H_\pi$，最终的残差项为：
+记同一平面的残差向量为 $`r_\pi`$，对应的平面参数雅可比为 $`H_\pi`$，最终的残差项为：
 
 $$
 \begin{aligned}
 R_\pi
-&=\operatorname{diag}\!\left(n^\top\Sigma_i n+\tau^2\right)
+&=\mathrm{diag}\!\left(n^\top\Sigma_i n+\tau^2\right)
   +H_\pi\Sigma_\pi H_\pi^\top,\\
 E_\pi
 &=r_\pi^\top R_\pi^{-1}r_\pi.
@@ -222,16 +222,16 @@ $$
 每次更新后，根据近期的线加速度、角加速度和当前点面观测的信息矩阵，决定下一次更新间隔。
 如果运动变化较大，而且这些变化会明显影响当前点面残差，就缩短间隔；反之，适当延长间隔，积累更多点。
 
-用 $\kappa$ 表示机体系下的线加速度和角加速度，$\bar\Lambda$ 为同一坐标系下按匹配点数平均的信息矩阵。
-以二阶运动项估计偏离匀速外推的程度，并用当前观测衡量，允许误差为 $\varepsilon$，下一次目标间隔为：
+用 $`\kappa`$ 表示机体系下的线加速度和角加速度，$`\bar{\Lambda}`$ 为同一坐标系下按匹配点数平均的信息矩阵。
+以二阶运动项估计偏离匀速外推的程度，并用当前观测衡量，允许误差为 $`\varepsilon`$，下一次目标间隔为：
 
 $$
 \begin{aligned}
 e^2(\Delta t)
-&\simeq \frac{\Delta t^4}{4}\kappa^\top\bar\Lambda\kappa,\\
+&\simeq \frac{\Delta t^4}{4}\kappa^\top\bar{\Lambda}\kappa,\\
 \Delta t_{\mathrm{next}}
-&=\operatorname{clip}\!\left(
-\left(\frac{4\varepsilon^2}{\kappa^\top\bar\Lambda\kappa}\right)^{1/4},
+&=\mathrm{clip}\!\left(
+\left(\frac{4\varepsilon^2}{\kappa^\top\bar{\Lambda}\kappa}\right)^{1/4},
 \Delta t_{\min},\Delta t_{\max}\right).
 \end{aligned}
 $$
@@ -251,13 +251,13 @@ $$
 \begin{aligned}
 e_k &= N_k^*-N_k,\\
 \ell_{k+1}
-&=\operatorname{clip}\!\left(
+&=\mathrm{clip}\!\left(
 \ell_k-K_{p,k}e_k-K_{d,k}\frac{e_k-e_{k-1}}{\Delta t_k},
 \ell_{\min},\ell_{\max}\right).
 \end{aligned}
 $$
 
-其中，$N_k^*$ 为目标点数，$\ell_k$ 为采样体素边长，两个增益随场景尺度、点数误差及其变化调整。
+其中，$`N_k^*`$ 为目标点数，$`\ell_k`$ 为采样体素边长，两个增益随场景尺度、点数误差及其变化调整。
 
 [![运行轨迹上的自适应时间窗口](assets/experiments/adaptive-time-window.svg)](assets/experiments/adaptive-time-window.svg)
 
