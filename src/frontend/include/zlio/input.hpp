@@ -174,6 +174,8 @@ private:
     ReturnBuffer points_;
     WindowConfig window_;
     double minimum_range_, maximum_range_;
+    Vec3 blind_center_;
+    double blind_radius_;
     std::size_t maximum_points_, startup_points_ = 0;
     std::deque<StartupScan> startup_;
     std::deque<std::pair<Time, Time>> packets_;

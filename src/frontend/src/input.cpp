@@ -208,6 +208,8 @@ Input::Input(const Config& config, InputBufferLimits limits)
       window_(config.window),
       minimum_range_(config.minimum_range),
       maximum_range_(config.maximum_range),
+      blind_center_(config.blind_center),
+      blind_radius_(config.blind_radius),
       maximum_points_(limits.maximum_lidar_points) {
     if (maximum_points_ == 0)
         throw std::invalid_argument("input cloud capacity must be positive");
@@ -238,7 +240,8 @@ void Input::addScan(Scan scan) {
                               [&](const Point& point) {
                                   const double range = point.position.norm();
                                   return !point.position.allFinite() || range < minimum_range_ ||
-                                         range > maximum_range_;
+                                         range > maximum_range_ ||
+                                         (point.position - blind_center_).norm() < blind_radius_;
                               }),
                scan.end());
 

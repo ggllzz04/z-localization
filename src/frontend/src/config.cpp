@@ -99,10 +99,15 @@ void require(const YAML::Node& node, const char* key, const char* path) {
 void readSensor(const YAML::Node& node, Config& config) {
     require(node, "gravity", "sensor.gravity");
     require(node, "body_from_lidar", "sensor.body_from_lidar");
-    checkKeys(node, {"gravity", "minimum_range", "maximum_range", "body_from_lidar"});
+    checkKeys(node, {"gravity", "minimum_range", "maximum_range", "blind_center", "blind_radius",
+                     "body_from_lidar"});
     read(node, "gravity", config.gravity);
     read(node, "minimum_range", config.minimum_range);
     read(node, "maximum_range", config.maximum_range);
+    std::array<double, 3> blind_center{0, 0, 0};
+    read(node, "blind_center", blind_center);
+    config.blind_center = Eigen::Map<Vec3>(blind_center.data());
+    read(node, "blind_radius", config.blind_radius);
     const auto extrinsic = node["body_from_lidar"];
     require(extrinsic, "translation", "sensor.body_from_lidar.translation");
     require(extrinsic, "rotation_xyzw", "sensor.body_from_lidar.rotation_xyzw");
@@ -349,6 +354,9 @@ void validateInitialConditions(const Config& config) {
     if (!std::isfinite(config.minimum_range) || config.minimum_range < 0 ||
         config.minimum_range >= config.maximum_range)
         throw std::invalid_argument("invalid range limits");
+    if (!config.blind_center.allFinite() || !std::isfinite(config.blind_radius) ||
+        config.blind_radius < 0)
+        throw std::invalid_argument("invalid blind sphere");
     if (!config.body_from_lidar.position.allFinite() ||
         !config.body_from_lidar.rotation.coeffs().allFinite() ||
         std::abs(config.body_from_lidar.rotation.norm() - 1) > .01)

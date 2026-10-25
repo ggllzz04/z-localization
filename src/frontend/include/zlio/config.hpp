@@ -190,6 +190,10 @@ struct Config {
     double minimum_range = .5;
     /// 有效测距上限，m。
     double maximum_range = 100;
+    /// 盲区球心（雷达系），m：球内的回波是车体自身，丢弃。
+    Vec3 blind_center = Vec3::Zero();
+    /// 盲区球半径，m；0 关闭。
+    double blind_radius = 0;
     /// IMU 系加速度偏置初值及先验中心，m/s²。
     Vec3 initial_accel_bias = Vec3::Zero();
     /// 加速度偏置先验各轴标准差，m/s²。
