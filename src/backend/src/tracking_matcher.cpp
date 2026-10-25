@@ -71,8 +71,20 @@ PriorMapObservation TrackingMatcher::compute(GlobalObservationWork& work) {
         return observation;
     }
 
-    const Cloud::Ptr source = voxelize(*work.source, config_.registration.voxel_resolution);
-    if (source->empty() || !corrector_.setTarget(work.target, work.reference.index)) {
+    // 场外层可用时：源加上高处点，目标并上场外层（合并目标以自身为身份缓存，不用参考关键帧编号）。
+    Cloud::ConstPtr target = work.target;
+    int target_id = work.reference.index;
+    Cloud::Ptr full_source = work.source;
+    if (work.venue_cloud && !work.venue_cloud->empty()) {
+        target = mergedTarget(work);
+        target_id = -1;
+        if (work.source_high && !work.source_high->empty()) {
+            full_source.reset(new Cloud(*work.source));
+            *full_source += *work.source_high;
+        }
+    }
+    const Cloud::Ptr source = voxelize(*full_source, config_.registration.voxel_resolution);
+    if (source->empty() || !corrector_.setTarget(target, target_id)) {
         observation.evidence.disposition = ObservationDisposition::ModelInvalid;
         observation.evidence.reason = "prior scan-to-map preparation failed";
         return observation;
@@ -92,11 +104,17 @@ PriorMapObservation TrackingMatcher::compute(GlobalObservationWork& work) {
     if (config_.debug_enabled && observation.registration.source_to_target.allFinite()) {
         observation.debug_aligned_source = transformCloud(
             *source, work.reference.optimized_pose * observation.registration.source_to_target);
-        observation.debug_target = transformCloud(*work.target, work.reference.optimized_pose);
+        observation.debug_target = transformCloud(*target, work.reference.optimized_pose);
     }
 
     classifyObservation(work, observation);
     return observation;
+}
+/// 先验子图（参考关键帧系）并上参考关键帧 radius 内的场外层点。
+Cloud::ConstPtr TrackingMatcher::mergedTarget(const GlobalObservationWork& work) {
+    return venue_targets_.merged(work.reference.index, work.venue_revision, *work.target,
+                                 *work.venue_cloud, work.reference.optimized_pose,
+                                 config_.tracking.venue_layer.radius);
 }
 /// 根据似然有效性和物理校正幅度分类先验图观测，并保存地图系测量位姿。
 void TrackingMatcher::classifyObservation(const GlobalObservationWork& work,
@@ -159,6 +177,12 @@ bool TrackingMatcher::prepareSource(GlobalObservationWork& work) const {
     work.accumulated_frames = source.frame_count;
     work.source_span_seconds = source.span_seconds;
     work.source = std::move(source.cloud);
+    if (work.venue_cloud) {  // the high points of the same frames, for the venue layer
+        work.source_high = accumulateHighSource(work.source_snapshot.reference,
+                                                work.source_snapshot.causal_history,
+                                                config_.tracking.source)
+                               .cloud;
+    }
     if (work.accumulated_frames < config_.tracking.source.min_frames) {
         work.prior_input.reason = "prior scan-to-map source has too few causal frames";
         return false;

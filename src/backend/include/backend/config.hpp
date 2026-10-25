@@ -160,6 +160,23 @@ struct PureOdometryConfig {
     Eigen::Vector2d origin_xy = Eigen::Vector2d::Zero();
 };
 
+/// 场外层：场地围挡以上的静止点，开局定稳后在线累积，冻结后并进跟踪配准（需要 input.max_point_height）。
+struct VenueLayerConfig {
+    bool enabled = false;
+    /// 体素边长，m。
+    double voxel = 0.3;
+    /// 体素被这么多帧看见才算静止。
+    int min_frames = 3;
+    /// 从第一次累积起的时长，s；到了就冻结，冻结后才用于配准。
+    double build_seconds = 60.0;
+    /// 静止体素至少这么多才用。
+    std::size_t min_voxels = 500;
+    /// 并进配准目标的场外点离参考关键帧的最大距离，m。
+    double radius = 45.0;
+    /// 恢复配准源里高处点的体素边长，m：恢复要试几十个航向，高处点按这个粗分辨率降采样。
+    double recovery_voxel = 1.0;
+};
+
 /// 常规跟踪的观测周期、目标子图和运动检查参数。
 struct TrackingConfig {
     double correction_period = 0.8;
@@ -172,6 +189,7 @@ struct TrackingConfig {
     double max_rotation_correction_rad = 15.0 * M_PI / 180.0;
     double suspicious_linear_speed = 4.0;
     double suspicious_angular_speed = 3.0;
+    VenueLayerConfig venue_layer;
 };
 
 /// 全局观测的一致性检验和连续冲突判定参数。
@@ -219,6 +237,14 @@ struct UwbConfig {
     double odom_sync_tolerance = 0.25;
     double recovery_search_radius = 2.0;
     int recovery_candidates = 8;
+    /// 可信状态下 UWB 未被接纳且与当前位姿相差超过此值时记一次分歧，m；0 关闭。
+    double conflict_distance = 0.0;
+    /// 连续分歧达到此次数时按观测冲突进入 SUSPECT。
+    int conflict_updates = 3;
+    /// 有 UWB 时，描述子恢复结果的天线位置与 UWB 位置的最大水平距离，m；0 不限。
+    double recovery_gate = 0.0;
+    /// 恢复周期内还没有 UWB 时，描述子兜底前等待 UWB 的时间，s；0 不等。
+    double recovery_wait = 0.0;
     /// 车体坐标系到前端传感器坐标系的固定变换。
     Eigen::Matrix4d T_sensor_body = Eigen::Matrix4d::Identity();
     /// UWB 天线相位中心在前端传感器坐标系中的位置，m。

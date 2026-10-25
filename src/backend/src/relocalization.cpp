@@ -257,9 +257,18 @@ bool Search::prepareScanToMapInputs() {
 
 /// 按先验关键帧和子图配置取得可复用的几何验证目标。
 RelocalizationPreparedTarget Search::directTargetFor(const int center_index) {
-    return target_cache_.getOrPrepare(center_index, target_keyframe_limit_,
-                                      config_.point_to_plane_config.voxel_resolution, keyframes_,
-                                      config_.relocalization_submap_radius);
+    RelocalizationPreparedTarget target = target_cache_.getOrPrepare(
+        center_index, target_keyframe_limit_, config_.point_to_plane_config.voxel_resolution,
+        keyframes_, config_.relocalization_submap_radius);
+    Keyframe reference;
+    if (target.ready() && request_.venue_targets && request_.venue_cloud &&
+        !request_.venue_cloud->empty() && keyframes_.get(center_index, &reference)) {
+        target.target = request_.venue_targets->merged(center_index, request_.venue_revision,
+                                                       *target.target, *request_.venue_cloud,
+                                                       reference.optimized_pose,
+                                                       request_.venue_radius);
+    }
+    return target;
 }
 
 /// 将配准支撑、残差和可观性诊断格式化为日志文本。

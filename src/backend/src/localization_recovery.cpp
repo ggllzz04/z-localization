@@ -160,7 +160,25 @@ std::optional<RecoveryWork> Localization::captureRecovery() {
     work.force_startup_hint =
         work.startup_hint_prior.has_value() && config_.startup_hint.force_until_matched;
     work.uwb_prior = makeUwbRecoveryPriorLocked(frames_.latest());
+    if (config_.uwb.enabled) {
+        work.uwb_gate = config_.uwb.recovery_gate;
+        // 每个恢复周期（状态代次或前端代次变化）从第一帧起计时；等到 UWB 后不再等。
+        if (uwb_wait_generation_ != state_.generation() || uwb_wait_epoch_ != active_epoch_ ||
+            std::isnan(uwb_wait_start_)) {
+            uwb_wait_generation_ = state_.generation();
+            uwb_wait_epoch_ = active_epoch_;
+            uwb_wait_start_ = work.frame.timestamp;
+        }
+        if (work.uwb_prior)
+            uwb_wait_start_ = -std::numeric_limits<double>::infinity();
+        work.uwb_waiting =
+            !work.uwb_prior && work.frame.timestamp - uwb_wait_start_ < config_.uwb.recovery_wait;
+    }
     work.source_history.assign(frames_.history().begin(), frames_.history().end());
+    if (venue_layer_.ready()) {
+        work.venue_cloud = venue_layer_.cloud();
+        work.venue_revision = venue_layer_.revision();
+    }
     return work;
 }
 

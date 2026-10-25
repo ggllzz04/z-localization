@@ -33,6 +33,10 @@ void ParameterReader::loadUwb() {
     getParam("uwb/odom_sync_tolerance", parameters_.runtime.uwb.odom_sync_tolerance);
     getParam("uwb/recovery_search_radius", parameters_.runtime.uwb.recovery_search_radius);
     getParam("uwb/recovery_candidates", parameters_.runtime.uwb.recovery_candidates);
+    getParam("uwb/conflict_distance", parameters_.runtime.uwb.conflict_distance);
+    getParam("uwb/conflict_updates", parameters_.runtime.uwb.conflict_updates);
+    getParam("uwb/recovery_gate", parameters_.runtime.uwb.recovery_gate);
+    getParam("uwb/recovery_wait", parameters_.runtime.uwb.recovery_wait);
     loadUwbMeasurementModel();
     loadUwbBootstrap();
 }

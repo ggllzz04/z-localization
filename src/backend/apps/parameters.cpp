@@ -47,6 +47,8 @@ void ParameterReader::loadCommonInput() {
     getParam("common/sync_odom_topic", parameters_.input.sync_odom_topic);
     getParam("common/cloud_topic", parameters_.input.cloud_topic);
     getParam("common/input_cloud_in_local_frame", parameters_.input.cloud_in_local_frame);
+    getParam("common/max_point_height", parameters_.input.max_point_height);
+    getParam("common/sensor_height", parameters_.input.sensor_height);
     if (parameters_.input.frontend == "zlio" && !parameters_.input.cloud_in_local_frame)
         throw std::invalid_argument(
             "ZLIO observations require common.input_cloud_in_local_frame=true");
@@ -150,6 +152,17 @@ void ParameterReader::loadTracking() {
     getParam<double>("tracking/source/max_rotation_deg", tracking_source_max_rotation_deg, 0.0);
     parameters_.runtime.tracking.source.max_rotation_rad =
         degreesToRadians(tracking_source_max_rotation_deg);
+    auto& venue = parameters_.runtime.tracking.venue_layer;
+    getParam("tracking/venue_layer/enabled", venue.enabled);
+    getParam("tracking/venue_layer/voxel", venue.voxel);
+    getParam("tracking/venue_layer/min_frames", venue.min_frames);
+    getParam("tracking/venue_layer/build_seconds", venue.build_seconds);
+    int venue_min_voxels = static_cast<int>(venue.min_voxels);
+    getParam<int>("tracking/venue_layer/min_voxels", venue_min_voxels, venue_min_voxels);
+    venue.min_voxels = static_cast<std::size_t>(std::max(0, venue_min_voxels));
+    getParam("tracking/venue_layer/radius", venue.radius);
+    getParam("tracking/venue_layer/recovery_voxel", venue.recovery_voxel);
+    venue.min_frames = std::max(1, venue.min_frames);
     getParam("tracking/max_translation_correction",
              parameters_.runtime.tracking.max_translation_correction);
     double max_rotation_correction_deg = 15.0;

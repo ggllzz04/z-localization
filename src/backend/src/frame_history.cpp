@@ -219,6 +219,20 @@ SourceAccumulationResult accumulateSource(const FrontendFrame& reference,
                                           const SourceAccumulationConfig& config) {
     return accumulate(reference, history, config);
 }
+/// 同样的帧选择，换成各帧的高处点。
+SourceAccumulationResult accumulateHighSource(const FrontendFrame& reference,
+                                              const std::vector<FrontendFrame>& history,
+                                              const SourceAccumulationConfig& config) {
+    const auto high = [](FrontendFrame frame) {
+        frame.cloud_local = frame.cloud_high ? frame.cloud_high : Cloud::Ptr(new Cloud);
+        return frame;
+    };
+    std::vector<FrontendFrame> frames;
+    frames.reserve(history.size());
+    for (const auto& frame : history)
+        frames.push_back(high(frame));
+    return accumulate(high(reference), frames, config);
+}
 /// 按各自帧身份和运动连续性累计参考坐标系下的因果点云。
 SourceAccumulationResult accumulateSource(const Keyframe& reference,
                                           const std::vector<Keyframe>& history,

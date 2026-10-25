@@ -34,6 +34,10 @@ struct RosInputParameters {
     double synchronizer_max_interval = 0.05;
     double maintenance_period = 0.2;
     BodyTransform body_transform;
+    /// 输入帧只保留不高于传感器下方地面此高度的点（按里程计的重力方向），m；0 全部保留。
+    double max_point_height = 0.0;
+    /// 传感器离地高度，m；仅用于 max_point_height。
+    double sensor_height = 0.0;
 };
 
 /// 描述子类型、姿态整平及各实现的参数。

@@ -4,6 +4,7 @@
  */
 
 #include <algorithm>
+#include <sstream>
 #include <utility>
 
 #include "backend/frame_history.hpp"
@@ -24,8 +25,17 @@ void RecoveryMatcher::prepare(RecoveryWork& work) const {
                               work.accumulated_frames >= config_.recovery.source.min_frames;
     work.prior_positions = prior_map_.positions();
     if (source_cloud && !source_cloud->empty()) {
-        work.fine_source =
+        // 场外层可用时配准源加上同一批帧的高处点（按 recovery_voxel 粗降采样，免得几十次航向配准都按
+        // 几倍的点数算）；描述子仍只用低处点（先验描述子就是这样建的）。
+        const Cloud::Ptr fine =
             voxelize(*source_cloud, config_.relocalization.point_to_plane_config.voxel_resolution);
+        if (work.venue_cloud && !work.venue_cloud->empty()) {
+            const auto high =
+                accumulateHighSource(work.frame, work.source_history, config_.recovery.source).cloud;
+            if (high && !high->empty())
+                *fine += *voxelize(*high, config_.venue.recovery_voxel);
+        }
+        work.fine_source = fine;
         if (config_.relocalization.point_to_plane_config.voxel_resolution > 0)
             work.coarse_source =
                 voxelize(*work.fine_source,
@@ -59,6 +69,12 @@ bool RecoveryMatcher::match(const RecoveryWork& work,
     request.position_prior = position_prior;
     request.source_information_scale =
         1.0 / static_cast<double>(std::max(1, work.accumulated_frames));
+    if (work.venue_cloud && !work.venue_cloud->empty()) {
+        request.venue_cloud = work.venue_cloud;
+        request.venue_revision = work.venue_revision;
+        request.venue_radius = config_.venue.radius;
+        request.venue_targets = &venue_targets_;
+    }
     if (position_prior == nullptr) {
         if (work.identity.status == LocalizationStatus::Suspect) {
             request.search_radius = config_.recovery.suspect_search_radius;
@@ -99,12 +115,16 @@ bool RecoveryMatcher::match(const RecoveryWork& work,
 
 /// 按启动提示、UWB 和描述子优先级求解完整可观恢复位姿。
 RecoveryResult RecoveryMatcher::compute(const RecoveryWork& work) {
+    // 恢复配准用上了场外层时在来源里注明。
+    const std::string scan = work.venue_cloud && !work.venue_cloud->empty()
+                                 ? " + scan-to-map with venue layer"
+                                 : " + scan-to-map";
     RecoveryResult result;
     // 显式责任链：完整启动提示 → UWB 位置先验 → 描述子；每个分支仍调用同一匹配器。
     if (work.startup_hint_prior) {
         if (match(work, &*work.startup_hint_prior, result)) {
             result.outcome = RecoveryOutcome::Matched;
-            result.source = "startup hint + scan-to-map";
+            result.source = "startup hint" + scan;
             return result;
         }
         if (work.force_startup_hint) {
@@ -129,12 +149,30 @@ RecoveryResult RecoveryMatcher::compute(const RecoveryWork& work) {
         return result;
     if (work.uwb_prior && match(work, &*work.uwb_prior, result)) {
         result.outcome = RecoveryOutcome::Matched;
-        result.source = "UWB + scan-to-map";
+        result.source = "UWB" + scan;
+        return result;
+    }
+    if (work.uwb_waiting) {
+        BACKEND_DEBUG_STREAM("descriptor recovery waits for a UWB position");
         return result;
     }
     if (match(work, nullptr, result)) {
+        if (work.uwb_prior && work.uwb_gate > 0.0) {
+            // 对称场地上描述子常落在镜像：离 UWB 远的不收。
+            const Eigen::Vector3d antenna = result.pose.block<3, 3>(0, 0) *
+                                                work.uwb_prior->runtime_sensor_point +
+                                            result.pose.block<3, 1>(0, 3);
+            const double distance = (antenna - work.uwb_prior->map_point).head<2>().norm();
+            if (distance > work.uwb_gate) {
+                std::ostringstream reason;
+                reason << "descriptor pose " << distance << " m from the UWB position";
+                result.outcome = RecoveryOutcome::Failed;
+                result.source = reason.str();
+                return result;
+            }
+        }
         result.outcome = RecoveryOutcome::Matched;
-        result.source = (result.source.empty() ? "descriptor" : result.source) + " + scan-to-map";
+        result.source = (result.source.empty() ? "descriptor" : result.source) + scan;
         return result;
     }
     result.outcome = RecoveryOutcome::Failed;

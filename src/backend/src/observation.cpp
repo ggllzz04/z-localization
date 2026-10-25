@@ -9,6 +9,7 @@
 #include <sstream>
 #include <utility>
 
+#include "backend/geometry.hpp"
 #include "backend/localization.hpp"
 #include "backend/logger.hpp"
 #include "backend/measurement.hpp"
@@ -50,6 +51,10 @@ std::optional<GlobalObservationWork> Localization::captureTracking() {
         work.fallback_source = work.runtime.cloud;
     }
     work.previous_reference_index = last_tracking_reference_index_;
+    if (venue_layer_.ready() && !work.source_snapshot_missing) {
+        work.venue_cloud = venue_layer_.cloud();
+        work.venue_revision = venue_layer_.revision();
+    }
     return work;
 }
 /// NORMAL 全局观测从线性化到状态提交期间共享的临时事务数据。
@@ -57,6 +62,8 @@ struct GlobalObservationTransaction {
     PoseSqrtInformation prior_information_right;
     ObservationBatch observations;
     bool publish_state = false;
+    /// UWB 连续大偏差达到次数时的冲突说明；空表示没有。
+    std::string uwb_disagreement;
 };
 
 namespace {
@@ -236,6 +243,23 @@ void Localization::assessGlobalInnovationsLocked(const GlobalObservationWork& wo
                 break;
         }
     }
+    // 单项通过的激光被接纳时，被丢掉的 UWB 只是兄弟证据；它持续大偏差说明激光可能锁在了错误位置
+    // （对称场地的镜像），按冲突处理。
+    for (const auto& entry : observations.entries) {
+        if (entry.source != ObservationSource::Uwb || config_.uwb.conflict_distance <= 0.0)
+            continue;
+        const double distance = entry.innovation.raw_residual_norm;
+        if (entry.accepted || !(distance > config_.uwb.conflict_distance)) {
+            uwb_disagreements_ = 0;
+            continue;
+        }
+        if (++uwb_disagreements_ >= config_.uwb.conflict_updates) {
+            std::ostringstream reason;
+            reason << "UWB disagrees with the pose by " << distance << " m for "
+                   << uwb_disagreements_ << " consecutive updates";
+            transaction.uwb_disagreement = reason.str();
+        }
+    }
 }
 
 /// 插入已通过创新检验的因子并更新图及在线标定。
@@ -264,17 +288,21 @@ void Localization::updateGlobalObservationStateLocked(GlobalObservationTransacti
                                                       GlobalObservationCommit& commit) {
     const auto conclusion = transaction.observations.conclusion();
     commit.had_conflict = conclusion.had_conflict;
-    if (conclusion.outcome == ObservationOutcome::Unavailable)
-        return;
     if (conclusion.outcome == ObservationOutcome::Accepted) {
         commit.transition = state_.onTrustedCorrection(conclusion.reason,
                                                        TrustedCorrectionSource::RegularObservation);
         transaction.publish_state = true;
-        return;
+    } else if (conclusion.outcome == ObservationOutcome::Conflict) {
+        commit.transition = state_.onCorrectionConflict(conclusion.reason,
+                                                        config_.innovation.conflicts_before_suspect);
+        transaction.publish_state = true;
     }
-    commit.transition =
-        state_.onCorrectionConflict(conclusion.reason, config_.innovation.conflicts_before_suspect);
-    transaction.publish_state = true;
+    if (!transaction.uwb_disagreement.empty() &&
+        state_.status() != LocalizationStatus::Suspect) {
+        commit.had_conflict = true;
+        commit.transition = state_.onCorrectionConflict(transaction.uwb_disagreement, 1);
+        transaction.publish_state = true;
+    }
     if (commit.transition.changed && commit.transition.current == LocalizationStatus::Suspect) {
         beginSuspectRecoveryLocked();
     }
@@ -285,6 +313,7 @@ GlobalObservationCommit Localization::commit(const GlobalObservationWork& work,
                                              const PriorMapObservation& prior_observation) {
     GlobalObservationCommit commit;
     GlobalObservationTransaction transaction;
+    bool venue_frozen = false;
     withOutputCommit([&] {
         const ObservationEvidence* invalid_evidence = nullptr;
         if (prior_observation.evidence.configured &&
@@ -316,12 +345,26 @@ GlobalObservationCommit Localization::commit(const GlobalObservationWork& work,
                 assessGlobalInnovationsLocked(work, transaction, commit);
                 applyGlobalObservationFactorsLocked(work, prior_observation, transaction, commit);
                 updateGlobalObservationStateLocked(transaction, commit);
+                // 场外层：配准被接受、NORMAL、UWB 没有在报分歧时，把这一帧的高处点按测得的位姿累积进去。
+                const auto& high = work.source_snapshot.reference.cloud_high;
+                if (config_.tracking.venue_layer.enabled && commit.prior_accepted &&
+                    state_.status() == LocalizationStatus::Normal && uwb_disagreements_ == 0 &&
+                    !venue_layer_.frozen() && high && !high->empty()) {
+                    venue_frozen = venue_layer_.insert(
+                        *transformCloud(*high, prior_observation.measured_map_pose),
+                        work.runtime.timestamp, static_cast<std::uint64_t>(work.runtime.index) + 1U);
+                }
             }
         }
     });
 
     if (reportDiscardedObservation(work, commit))
         return commit;
+    if (venue_frozen) {
+        BACKEND_INFO_STREAM("venue layer ready: " << (venue_layer_.cloud() ? venue_layer_.cloud()->size() : 0U)
+                                                  << " static voxels of " << venue_layer_.voxels()
+                                                  << " seen, from " << venue_layer_.frames() << " frames");
+    }
     for (const std::string& reason : transaction.observations.unavailable) {
         BACKEND_WARN_STREAM("global observation unavailable (state unchanged): " << reason);
     }

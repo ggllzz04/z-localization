@@ -4,9 +4,11 @@
  */
 #pragma once
 
+#include <map>
 #include <utility>
 
 #include "backend/config.hpp"
+#include "backend/venue_layer.hpp"
 #include "backend/work.hpp"
 
 namespace backend {
@@ -24,6 +26,8 @@ struct RecoveryMatcherConfig {
     RecoveryConfig recovery;
     RelocalizationConfig relocalization;
     bool debug_enabled = false;
+    /// 场外层设置（tracking.venue_layer）：并进候选目标的半径、恢复源里高处点的体素。
+    VenueLayerConfig venue;
 };
 
 /// 计算端只有配置、地图和几何缓存；没有图/状态机/会话锁访问权。
@@ -45,10 +49,13 @@ private:
     /// 按似然有效性及物理幅度分类点面观测，并构造地图系测量。
     void classifyObservation(const GlobalObservationWork& work,
                              PriorMapObservation& observation) const;
+    /// 先验子图并上参考关键帧附近的场外层，按（参考关键帧、场外层版本）缓存。
+    Cloud::ConstPtr mergedTarget(const GlobalObservationWork& work);
     const TrackingMatcherConfig config_;
     const KeyframeMap& prior_map_;
     RelocalizationTargetCache& target_cache_;
     Registration corrector_;
+    VenueTargets venue_targets_{8};
 };
 
 enum class RecoveryOutcome { Deferred, Matched, Failed };
@@ -83,6 +90,8 @@ private:
     const KeyframeMap& prior_map_;
     const PlaceDescriptor& descriptor_;
     RelocalizationTargetCache& target_cache_;
+    /// 恢复候选的先验子图并上场外层的合并目标。
+    VenueTargets venue_targets_{32};
 };
 /// 报告跟踪观测、创新检验和最终图提交的诊断结果。
 void reportTracking(const GlobalObservationWork&, const PriorMapObservation&,

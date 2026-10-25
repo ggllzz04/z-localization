@@ -108,4 +108,8 @@ SourceAccumulationResult accumulateSource(const Keyframe& reference,
 SourceAccumulationResult accumulateSource(const FrontendFrame& reference,
                                           const std::vector<FrontendFrame>& history,
                                           const SourceAccumulationConfig& config);
+/// 同样的帧和门限，累计各帧的高处点（cloud_high）。
+SourceAccumulationResult accumulateHighSource(const FrontendFrame& reference,
+                                              const std::vector<FrontendFrame>& history,
+                                              const SourceAccumulationConfig& config);
 }  // namespace backend

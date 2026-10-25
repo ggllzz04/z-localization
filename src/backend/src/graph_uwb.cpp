@@ -429,8 +429,10 @@ InnovationTerm PoseGraph::linearizeUwbPosition(int index, const UwbMeasurement& 
         makeUwbFactor(index, measurement, use_z, gtsam::noiseModel::Unit::Create(use_z ? 3 : 2));
     std::vector<gtsam::Matrix> jacobians(factor->keys().size());
     const auto residual = factor->unwhitenedError(values, jacobians);
-    return detail::makeWhitenedInnovationTerm(
+    InnovationTerm term = detail::makeWhitenedInnovationTerm(
         std::vector<gtsam::Key>(factor->keys().begin(), factor->keys().end()), residual, jacobians,
         measurementCovariance(measurement, use_z), "UWB");
+    term.raw_residual_norm = residual.norm();
+    return term;
 }
 }  // namespace backend

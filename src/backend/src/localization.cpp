@@ -73,10 +73,12 @@ Localization::Localization(KeyframeMap& trajectory, KeyframeMap& prior_map,
       uwb_({config_.uwb, config_.graph.odom_noise, config_.innovation.rejection_probability,
             config_.prior_map_enabled},
            graph_, frames_.odometry()),
+      venue_layer_(config_.tracking.venue_layer),
       tracking_({config_.tracking, config_.relocalization.point_to_plane_config,
                  config_.registration_debug_enabled},
                 prior_map_, target_cache_),
-      recovery_({config_.recovery, config_.relocalization, config_.registration_debug_enabled},
+      recovery_({config_.recovery, config_.relocalization, config_.registration_debug_enabled,
+                 config_.tracking.venue_layer},
                 prior_map_, descriptor_, target_cache_),
       loop_cycle_({config_.loop, config_.relocalization.point_to_plane_config}) {
     for (const ConfigOverride& override : effective_config.overrides) {
@@ -220,6 +222,7 @@ void Localization::initialize() {
 /// 建立 SUSPECT 恢复源边界并重启必要的 UWB 启动配对。
 void Localization::beginSuspectRecoveryLocked() {
     frames_.beginRecovery();
+    uwb_disagreements_ = 0;
     last_recovery_timestamp_ = -std::numeric_limits<double>::infinity();
     last_recovery_cycle_time_ = Timestamp();
 

@@ -89,6 +89,24 @@ FrontendFrame LocalizationNode::makeFrontendFrame(
     frame.cloud_local = parameters_.input.cloud_in_local_frame
                             ? Cloud::Ptr(new Cloud(std::move(cloud)))
                             : transformCloud(cloud, frame.odom_pose.inverse());
+    if (parameters_.input.max_point_height > 0.0) {
+        // 只留场地围挡高度以下的点：场外的看台、棚顶、大屏换了场馆就不一样，先验图也按同一高度裁剪。
+        const Eigen::Vector3f up = frame.odom_pose.block<1, 3>(2, 0).cast<float>();
+        const float top =
+            static_cast<float>(parameters_.input.max_point_height - parameters_.input.sensor_height);
+        Cloud::Ptr kept(new Cloud);
+        kept->reserve(frame.cloud_local->size());
+        // 场外层开启时，裁掉的高处点另存，比赛中并进跟踪配准。
+        Cloud::Ptr high(parameters_.runtime.tracking.venue_layer.enabled ? new Cloud : nullptr);
+        for (const auto& point : frame.cloud_local->points) {
+            if (up.dot(point.getVector3fMap()) <= top)
+                kept->push_back(point);
+            else if (high)
+                high->push_back(point);
+        }
+        frame.cloud_local = kept;
+        frame.cloud_high = high;
+    }
     return frame;
 }
 

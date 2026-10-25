@@ -15,6 +15,7 @@
 #include "backend/localization_state.hpp"
 #include "backend/registration.hpp"
 #include "backend/target_cache.hpp"
+#include "backend/venue_layer.hpp"
 #include "backend/types.hpp"
 
 namespace backend {
@@ -64,7 +65,11 @@ struct RelocalizationRequest {
     /// 局部检索失败后补充的全局描述子候选数量。
     int global_fallback_candidates = 0;
     /// 源点云配准观测的信息缩放系数。
-    double source_information_scale = 1.0;
+    double source_information_scale = 1.0;    /// 冻结的场外层（map 系）与合并目标缓存；都有时候选目标并上候选关键帧 venue_radius 内的场外层。
+    Cloud::ConstPtr venue_cloud{};
+    std::uint64_t venue_revision = 0;
+    double venue_radius = 0.0;
+    VenueTargets* venue_targets = nullptr;
 };
 
 /// 重定位的匹配结果、全局变换与协方差。

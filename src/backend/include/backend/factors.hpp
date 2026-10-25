@@ -43,6 +43,8 @@ struct InnovationTerm {
     std::vector<Eigen::MatrixXd> whitened_jacobians;
     /// 观测项无效时的原因。
     std::string invalid_reason;
+    /// 未白化残差的范数（UWB 为天线位置差，m）；未计算时为 NaN。
+    double raw_residual_norm = std::numeric_limits<double>::quiet_NaN();
 };
 
 /// UWB 时间插值使用的前端里程计样本。

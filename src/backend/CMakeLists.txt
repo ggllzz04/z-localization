@@ -73,6 +73,7 @@ add_library(backend_core STATIC
     src/uwb_alignment_solver.cpp
     src/frame_history.cpp
     src/uwb_fusion.cpp
+    src/venue_layer.cpp
     src/gprobe/descriptor.cpp
     src/gprobe/geometry.cpp
     src/gprobe/retrieval.cpp

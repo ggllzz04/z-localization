@@ -25,6 +25,8 @@ struct FrontendFrame {
     PoseCovariance6d pose_covariance = PoseCovariance6d::Zero();
     bool pose_covariance_valid = false;
     Cloud::Ptr cloud_local{new Cloud};  // sensor 坐标系下的点云
+    /// 场外层开启时，高于 input.max_point_height 的点（sensor 坐标系），不在 cloud_local 里；否则为空。
+    Cloud::Ptr cloud_high;
 };
 
 /// 关键帧：从前端帧中选出的稀疏帧，参与回环和位姿图优化。

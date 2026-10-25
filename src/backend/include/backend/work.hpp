@@ -62,6 +62,11 @@ struct GlobalObservationWork {
     /// 捕获时可用的新鲜 UWB 因子；提交前再次核对消费水位。
     std::optional<UwbFactorInput> uwb;
     ObservationEvidence prior_input;
+    /// 冻结的场外层（map 系）及其版本；为空时只用先验子图配准。
+    Cloud::ConstPtr venue_cloud;
+    std::uint64_t venue_revision = 0;
+    /// 与 source 同一参考系的高处源点云（场外层可用时）。
+    Cloud::Ptr source_high;
 };
 
 /// 锁外 scan-to-map 计算产生的先验图观测候选。
@@ -119,6 +124,13 @@ struct RecoveryWork {
     /// MEASUREMENT。
     ObservationEvidence source_evidence;
     bool force_startup_hint = false;
+    /// 描述子恢复结果的天线与 UWB 位置的最大水平距离，m；0 不限。
+    double uwb_gate = 0.0;
+    /// 本恢复周期还在等待 UWB：描述子兜底推迟。
+    bool uwb_waiting = false;
+    /// 冻结的场外层（map 系）；有它时恢复配准的源加上高处点，目标并上场外层。
+    Cloud::ConstPtr venue_cloud;
+    std::uint64_t venue_revision = 0;
 };
 
 /// 单次回环候选验证所使用的轨迹和候选快照。

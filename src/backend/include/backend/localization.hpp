@@ -27,6 +27,7 @@
 #include "backend/pose_output.hpp"
 #include "backend/reset_coordinator.hpp"
 #include "backend/uwb_fusion.hpp"
+#include "backend/venue_layer.hpp"
 
 namespace backend {
 struct GlobalObservationTransaction;
@@ -307,6 +308,8 @@ private:
     FrameHistory frames_;
     PoseOutput poses_;
     UwbFusion uwb_;
+    /// 场外层：开局定稳后在线累积，冻结后并进跟踪配准（tracking.venue_layer）。
+    VenueLayer venue_layer_;
 
     mutable std::mutex mutex_;
     std::shared_ptr<const OutputView> output_view_;
@@ -324,6 +327,12 @@ private:
     EpochAnchor pending_epoch_anchor_;
 
     double last_recovery_timestamp_ = -std::numeric_limits<double>::infinity();
+    /// 可信状态下连续未被接纳且偏差超过 uwb.conflict_distance 的 UWB 解数量。
+    int uwb_disagreements_ = 0;
+    /// 当前恢复周期（状态代次与前端代次）开始等待 UWB 的帧时刻，s。
+    std::uint64_t uwb_wait_generation_ = 0;
+    std::uint64_t uwb_wait_epoch_ = 0;
+    double uwb_wait_start_ = std::numeric_limits<double>::quiet_NaN();
     int last_lidar_observation_runtime_index_ = -1;
     Timestamp last_global_observation_cycle_time_;
     Timestamp last_recovery_cycle_time_;
